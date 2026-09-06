@@ -205,7 +205,7 @@ resource "aws_instance" "builder" {
     printf '%s\n' "$FH" > /var/run/fh_token
     chmod 0600 /var/run/fh_token
 
-    determinate-nixd login --token-file /var/run/fh_token
+    determinate-nixd login token --token-file /var/run/fh_token
     fh apply nixos "${local.flake_reference}"
   EOF
 
@@ -225,5 +225,5 @@ output "public_ip" {
 }
 
 output "ssh_command" {
-  value = "ssh -i ~/builder.pem root@${aws_instance.builder.public_ip}"
+  value = "ssh root@${aws_instance.builder.public_ip}"
 }
