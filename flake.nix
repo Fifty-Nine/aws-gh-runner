@@ -6,14 +6,22 @@
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
   };
 
-  outputs = { self, nixpkgs, determinate }: {
-    nixosConfigurations.gh-runner = nixpkgs.lib.nixosSystem {
-      system = "aarch64-linux";
-      modules = [
-        "${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
-        determinate.nixosModules.default
-        ./gh-runner.nix
-      ];
+  outputs =
+    {
+      self,
+      nixpkgs,
+      determinate,
+    }:
+    {
+      nixosModules.gh-runner = import ./gh-runner.nix;
+
+      nixosConfigurations.gh-runner = nixpkgs.lib.nixosSystem {
+        system = "aarch64-linux";
+        modules = [
+          "${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
+          determinate.nixosModules.default
+          self.nixosModules.gh-runner
+        ];
+      };
     };
-  };
 }

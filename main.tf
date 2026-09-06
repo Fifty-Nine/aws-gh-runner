@@ -17,11 +17,22 @@ variable "aws_region" {
   default = "us-west-2"
 }
 
+variable "repos" {
+  type        = list(string)
+  description = "GitHub repositories (org/name) served by this runner"
+
+  validation {
+    # Repo strings become systemd unit attribute names; keep them strict.
+    condition     = alltrue([for repo in var.repos : can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repo))])
+    error_message = "Each repo must be of the form org/name using only alphanumerics, '.', '_' and '-'."
+  }
+}
+
 data "aws_ami" "detsys_nixos" {
   most_recent = true
 
   # Determinate Systems' AMI owner ID
-  owners      = ["535002876703"]
+  owners = ["535002876703"]
 
   filter {
     name   = "name"
@@ -36,6 +47,34 @@ data "aws_ami" "detsys_nixos" {
 
 locals {
   flake_reference = "Fifty-Nine/aws-gh-runner/0.1#nixosConfigurations.gh-runner"
+
+  # Overlay flake evaluated locally on the instance after the baseline fh
+  # apply. Template directives render the user's repos as a literal Nix
+  # list (pure eval-time data, no impure reads). Its nixpkgs and
+  # determinate inputs follow the baseline runner flake's, so the local
+  # switch reuses the store paths from the fh apply instead of resolving
+  # a fresh, unshared closure.
+  runner_flake = <<-NIX
+    {
+      inputs = {
+        runner.url = "https://flakehub.com/f/Fifty-Nine/aws-gh-runner/0.1";
+        nixpkgs.follows = "runner/nixpkgs";
+        determinate.follows = "runner/determinate";
+      };
+
+      outputs = { nixpkgs, determinate, runner, ... }: {
+        nixosConfigurations.runner = nixpkgs.lib.nixosSystem {
+          system = "aarch64-linux";
+          modules = [
+            "$${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
+            determinate.nixosModules.default
+            runner.nixosModules.gh-runner
+            { gh-runner.repos = [ %{for repo in var.repos} "${repo}" %{endfor} ]; }
+          ];
+        };
+      };
+    }
+  NIX
 }
 
 variable "instance_type" {
@@ -207,6 +246,16 @@ resource "aws_instance" "builder" {
 
     determinate-nixd login token --token-file /var/run/fh_token
     fh apply nixos "${local.flake_reference}"
+
+    # Layer the user-provided repo list on top of the baseline closure.
+    # Everything needed is already in the local store, so this switch is
+    # cheap. The generated flake is fully self-contained: pure eval, no
+    # runtime file reads.
+    mkdir -p /etc/gh-runner/runner-config
+    cat > /etc/gh-runner/runner-config/flake.nix <<'NIX'
+${local.runner_flake}
+NIX
+    nixos-rebuild switch --flake /etc/gh-runner/runner-config#runner
   EOF
 
   user_data_replace_on_change = true
