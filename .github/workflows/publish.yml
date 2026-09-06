@@ -5,28 +5,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  id-token: write # Required for FlakeHub authentication
-  contents: read
-
 jobs:
   flakehub-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
-
-      # extra-platforms lets the x86_64 CI runner evaluate and build the
-      # aarch64-linux NixOS closure (pure evaluation plus emulated builds of
-      # the few derivations not already in a binary cache).
-      - uses: DeterminateSystems/nix-installer-action@v16
-        with:
-          extra-conf: |
-            extra-platforms = aarch64-linux
-
-      # Uploads built closures to FlakeHub Cache so `fh apply` can fetch
-      # prebuilt store paths on deployment targets.
-      - uses: DeterminateSystems/flakehub-cache@v3
-
+      - uses: actions/checkout@v7.0.1
+      - uses: DeterminateSystems/determinate-nix-action@v3.22.3
+      - uses: DeterminateSystems/flakehub-cache@v3.22.3
       - name: Build NixOS closure
         run: nix build -L .#nixosConfigurations.gh-runner.config.system.build.toplevel
 
@@ -34,6 +23,4 @@ jobs:
         with:
           rolling: true
           visibility: "public"
-          # Required for `fh apply`/`fh resolve`, which fetch pre-resolved
-          # store paths from FlakeHub instead of evaluating locally.
           include-output-paths: true
