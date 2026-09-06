@@ -12,6 +12,15 @@
       nixpkgs,
       determinate,
     }:
+    let
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+      forEachSystem = nixpkgs.lib.genAttrs systems;
+    in
     {
       nixosModules.gh-runner = import ./gh-runner.nix;
 
@@ -23,5 +32,24 @@
           self.nixosModules.gh-runner
         ];
       };
+
+      devShells = forEachSystem (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              awscli2
+              opentofu
+              infracost
+              gh
+              tflint
+              jq
+            ];
+          };
+        }
+      );
     };
 }
