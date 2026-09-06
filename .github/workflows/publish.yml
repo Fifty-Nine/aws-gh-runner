@@ -21,3 +21,6 @@ jobs:
         with:
           rolling: true
           visibility: "public"
+          # Required for `fh apply`/`fh resolve`, which fetch pre-resolved
+          # store paths from FlakeHub instead of evaluating locally.
+          include-output-paths: true
