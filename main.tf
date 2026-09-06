@@ -67,12 +67,6 @@ variable "instance_profile_name" {
   description = "Existing IAM instance profile granting the instance access to its Secrets Manager entries"
 }
 
-variable "flakehub_token" {
-  type        = string
-  sensitive   = true
-  description = "FlakeHub authentication token"
-}
-
 variable "ssh_allowed_cidr" {
   type        = string
   default     = null
@@ -184,9 +178,32 @@ resource "aws_instance" "builder" {
     delete_on_termination = true
   }
 
+  # Fetches the FlakeHub token from Secrets Manager using the instance's
+  # IAM profile credentials. curl's SigV4 support avoids depending on any
+  # preinstalled AWS tooling at user_data time.
   user_data = <<-EOF
     #!/bin/sh
     set -eux
+
+    imds() { curl -sf --retry 10 --retry-delay 2 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" "$@"; }
+    IMDS_TOKEN=$(curl -sf --retry 10 --retry-delay 2 -X PUT http://169.254.169.254/latest/api/token \
+      -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+    ROLE=$(imds http://169.254.169.254/latest/meta-data/iam/security-credentials/ | head -1)
+    CREDS=$(imds "http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE")
+    AK=$(printf '%s' "$CREDS" | sed -n 's/.*"AccessKeyId"[ :]*"\([^"]*\)".*/\1/p')
+    SK=$(printf '%s' "$CREDS" | sed -n 's/.*"SecretAccessKey"[ :]*"\([^"]*\)".*/\1/p')
+    TOK=$(printf '%s' "$CREDS" | sed -n 's/.*"Token"[ :]*"\([^"]*\)".*/\1/p')
+
+    FH=$(curl -sf --aws-sigv4 "aws:amz:${var.aws_region}:secretsmanager" --user "$AK:$SK" \
+      -H "x-amz-security-token: $TOK" \
+      -H "x-amz-target: secretsmanager.GetSecretValue" \
+      -H "content-type: application/x-amz-json-1.1" \
+      -d '{"SecretId":"github-runner/flakehub-token"}' \
+      https://secretsmanager.${var.aws_region}.amazonaws.com/ \
+      | sed -n 's/.*"SecretString":"\([^"]*\)".*/\1/p')
+
+    printf '%s\n' "$FH" > /var/run/fh_token
+    chmod 0600 /var/run/fh_token
 
     determinate-nixd login --token-file /var/run/fh_token
     fh apply nixos "${local.flake_reference}"
