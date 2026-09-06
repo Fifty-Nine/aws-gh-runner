@@ -99,7 +99,7 @@ in
     };
 
     systemd.tmpfiles.rules = [
-      "d /var/lib/determinate 0755 ${user} ${user} -"
+      "d /var/lib/determinate 0755 ${user} -"
     ];
 
     systemd.services = {
@@ -118,13 +118,13 @@ in
             --secret-id ${lib.escapeShellArg config.gh-runner.patSecretArn} \
             --query SecretString --output text > /run/gh-runner/gh_pat
           chmod 0600 /run/gh-runner/gh_pat
-          chown ${user}:${user} /run/gh-runner/gh_pat
+          chown ${user} /run/gh-runner/gh_pat
 
           aws secretsmanager get-secret-value \
             --secret-id ${lib.escapeShellArg config.gh-runner.flakehubTokenSecretArn} \
             --query SecretString --output text > /run/gh-runner/fh_token
           chmod 0600 /run/gh-runner/fh_token
-          chown ${user}:${user} /run/gh-runner/fh_token
+          chown ${user} /run/gh-runner/fh_token
         '';
       };
     }
