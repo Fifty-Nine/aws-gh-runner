@@ -48,33 +48,9 @@ data "aws_ami" "detsys_nixos" {
 locals {
   flake_reference = "Fifty-Nine/aws-gh-runner/0.1#nixosConfigurations.gh-runner"
 
-  # Overlay flake evaluated locally on the instance after the baseline fh
-  # apply. Template directives render the user's repos as a literal Nix
-  # list (pure eval-time data, no impure reads). Its nixpkgs and
-  # determinate inputs follow the baseline runner flake's, so the local
-  # switch reuses the store paths from the fh apply instead of resolving
-  # a fresh, unshared closure.
-  runner_flake = <<-NIX
-    {
-      inputs = {
-        runner.url = "https://flakehub.com/f/Fifty-Nine/aws-gh-runner/0.1";
-        nixpkgs.follows = "runner/nixpkgs";
-        determinate.follows = "runner/determinate";
-      };
-
-      outputs = { nixpkgs, determinate, runner, ... }: {
-        nixosConfigurations.runner = nixpkgs.lib.nixosSystem {
-          system = "aarch64-linux";
-          modules = [
-            "$${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
-            determinate.nixosModules.default
-            runner.nixosModules.gh-runner
-            { gh-runner.repos = [ %{for repo in var.repos} "${repo}" %{endfor} ]; }
-          ];
-        };
-      };
-    }
-  NIX
+  runner_flake = templatefile("${path.module}/runner-flake.nix.tftpl", {
+    repos = var.repos
+  })
 }
 
 variable "instance_type" {
@@ -220,43 +196,11 @@ resource "aws_instance" "builder" {
   # Fetches the FlakeHub token from Secrets Manager using the instance's
   # IAM profile credentials. curl's SigV4 support avoids depending on any
   # preinstalled AWS tooling at user_data time.
-  user_data = <<-EOF
-    #!/bin/sh
-    set -eux
-
-    imds() { curl -sf --retry 10 --retry-delay 2 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" "$@"; }
-    IMDS_TOKEN=$(curl -sf --retry 10 --retry-delay 2 -X PUT http://169.254.169.254/latest/api/token \
-      -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
-    ROLE=$(imds http://169.254.169.254/latest/meta-data/iam/security-credentials/ | head -1)
-    CREDS=$(imds "http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE")
-    AK=$(printf '%s' "$CREDS" | sed -n 's/.*"AccessKeyId"[ :]*"\([^"]*\)".*/\1/p')
-    SK=$(printf '%s' "$CREDS" | sed -n 's/.*"SecretAccessKey"[ :]*"\([^"]*\)".*/\1/p')
-    TOK=$(printf '%s' "$CREDS" | sed -n 's/.*"Token"[ :]*"\([^"]*\)".*/\1/p')
-
-    FH=$(curl -sf --aws-sigv4 "aws:amz:${var.aws_region}:secretsmanager" --user "$AK:$SK" \
-      -H "x-amz-security-token: $TOK" \
-      -H "x-amz-target: secretsmanager.GetSecretValue" \
-      -H "content-type: application/x-amz-json-1.1" \
-      -d '{"SecretId":"github-runner/flakehub-token"}' \
-      https://secretsmanager.${var.aws_region}.amazonaws.com/ \
-      | sed -n 's/.*"SecretString":"\([^"]*\)".*/\1/p')
-
-    printf '%s\n' "$FH" > /var/run/fh_token
-    chmod 0600 /var/run/fh_token
-
-    determinate-nixd login token --token-file /var/run/fh_token
-    fh apply nixos "${local.flake_reference}"
-
-    # Layer the user-provided repo list on top of the baseline closure.
-    # Everything needed is already in the local store, so this switch is
-    # cheap. The generated flake is fully self-contained: pure eval, no
-    # runtime file reads.
-    mkdir -p /etc/gh-runner/runner-config
-    cat > /etc/gh-runner/runner-config/flake.nix <<'NIX'
-${local.runner_flake}
-NIX
-    nixos-rebuild switch --flake /etc/gh-runner/runner-config#runner
-  EOF
+  user_data = templatefile("${path.module}/user-data.sh.tftpl", {
+    aws_region      = var.aws_region
+    flake_reference = local.flake_reference
+    runner_flake    = local.runner_flake
+  })
 
   user_data_replace_on_change = true
 

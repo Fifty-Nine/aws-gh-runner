@@ -1,0 +1,19 @@
+{
+  inputs = {
+    runner.url = "https://flakehub.com/f/Fifty-Nine/aws-gh-runner/0.1";
+    nixpkgs.follows = "runner/nixpkgs";
+    determinate.follows = "runner/determinate";
+  };
+
+  outputs = { nixpkgs, determinate, runner, ... }: {
+    nixosConfigurations.runner = nixpkgs.lib.nixosSystem {
+      system = "aarch64-linux";
+      modules = [
+        "$${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
+        determinate.nixosModules.default
+        runner.nixosModules.gh-runner
+        { gh-runner.repos = [ %{for repo in repos} "${repo}" %{endfor} ]; }
+      ];
+    };
+  };
+}
