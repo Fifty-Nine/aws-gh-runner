@@ -127,6 +127,25 @@
      "Resource": "arn:aws:iam::821522070788:user/ec2-ephemeral-builder"
    },
    {
+     "Sid": "EC2InstanceProfile",
+     "Effect": "Allow",
+     "Action": [
+       "ec2:AssociateIamInstanceProfile",
+       "ec2:ReplaceIamInstanceProfileAssociation",
+       "ec2:DescribeIamInstanceProfileAssociations"
+     ],
+     "Resource": "*"
+   },
+   {
+     "Sid": "IAMPassRunnerRole",
+     "Effect": "Allow",
+     "Action": "iam:PassRole",
+     "Resource": "arn:aws:iam::821522070788:role/gh-runner-instance-role",
+     "Condition": {
+       "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" }
+     }
+   },
+   {
      "Sid": "EC2KeyPairManagement",
      "Effect": "Allow",
      "Action": [

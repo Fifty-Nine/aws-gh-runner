@@ -61,10 +61,10 @@ variable "ssh_key_name" {
   description = "Name of existing EC2 Key Pair in the target AWS region"
 }
 
-variable "github_runner_pat" {
+variable "instance_profile_name" {
   type        = string
-  sensitive   = true
-  description = "GitHub PAT (fine-grained, Administration:write on the runner repo) used to mint registration tokens on boot"
+  default     = "gh-runner-instance-role"
+  description = "Existing IAM instance profile granting the instance access to its Secrets Manager entries"
 }
 
 variable "flakehub_token" {
@@ -171,6 +171,11 @@ resource "aws_instance" "builder" {
 
   subnet_id              = aws_subnet.builder_subnet.id
   vpc_security_group_ids = [aws_security_group.builder_sg.id]
+  iam_instance_profile   = var.instance_profile_name
+
+  metadata_options {
+    http_tokens = "required"
+  }
 
   root_block_device {
     volume_size           = var.volume_size
@@ -182,9 +187,6 @@ resource "aws_instance" "builder" {
   user_data = <<-EOF
     #!/bin/sh
     set -eux
-
-    printf '%s\n' '${var.github_runner_pat}' > /var/run/gh_pat
-    chmod 0600 /var/run/gh_pat
 
     determinate-nixd login --token-file /var/run/fh_token
     fh apply nixos "${local.flake_reference}"
