@@ -20,8 +20,19 @@ let
     replaceStrings
     ;
 
+  user = "gh-runner";
+
   # `org/name` -> `org-name`, the systemd-safe instance name.
   runnerName = replaceStrings [ "/" ] [ "-" ];
+
+  # The determinate-nixd binary ships in the host system environment, not in
+  # any single package; shim it onto the runner's PATH so CI jobs can run
+  # `determinate-nixd login github-action` (required for FlakeHub Cache push
+  # access).
+  determinate-nixd-shim = pkgs.runCommand "determinate-nixd-shim" { } ''
+    mkdir -p $out/bin
+    ln -s /run/current-system/sw/bin/determinate-nixd $out/bin/determinate-nixd
+  '';
 in
 {
   options.gh-runner = {
@@ -40,6 +51,12 @@ in
       default = "github-runner/pat";
       description = "Secrets Manager secret holding the fine-grained GitHub PAT used to mint registration tokens";
     };
+
+    flakehubTokenSecretArn = lib.mkOption {
+      type = lib.types.str;
+      default = "github-runner/flakehub-token";
+      description = "Secrets Manager secret holding the FlakeHub device token used to restore host cache login between runner jobs";
+    };
   };
 
   config = {
@@ -54,20 +71,26 @@ in
     services.openssh.enable = true;
     networking.firewall.allowedTCPPorts = [ 22 ];
 
+    # magic-nix-cache refuses to run when the daemon does not trust the job
+    # user; trust is also required for it to register its substituter.
     nix.settings.trusted-users = [
       "@wheel"
       "root"
-      "gh-runner"
+      user
     ];
 
-    users.users.gh-runner = {
+    users.users.${user} = {
       isNormalUser = true;
       extraGroups = [ "wheel" ];
     };
 
+    systemd.tmpfiles.rules = [
+      "d /var/lib/determinate 0755 ${user} ${user} -"
+    ];
+
     systemd.services = {
-      gh-runner-pat = {
-        description = "Fetch GitHub runner PAT from AWS Secrets Manager";
+      gh-runner-secrets = {
+        description = "Fetch GitHub runner secrets from AWS Secrets Manager";
         wantedBy = [ "multi-user.target" ];
         before = map (repo: "github-runner-${runnerName repo}.service") config.gh-runner.repos;
         path = [ pkgs.awscli2 ];
@@ -81,6 +104,13 @@ in
             --secret-id ${lib.escapeShellArg config.gh-runner.patSecretArn} \
             --query SecretString --output text > /run/gh-runner/gh_pat
           chmod 0600 /run/gh-runner/gh_pat
+          chown ${user}:${user} /run/gh-runner/gh_pat
+
+          aws secretsmanager get-secret-value \
+            --secret-id ${lib.escapeShellArg config.gh-runner.flakehubTokenSecretArn} \
+            --query SecretString --output text > /run/gh-runner/fh_token
+          chmod 0600 /run/gh-runner/fh_token
+          chown ${user}:${user} /run/gh-runner/fh_token
         '';
       };
     }
@@ -88,8 +118,8 @@ in
       map (repo: {
         name = "github-runner-${runnerName repo}";
         value = {
-          after = [ "gh-runner-pat.service" ];
-          requires = [ "gh-runner-pat.service" ];
+          after = [ "gh-runner-secrets.service" ];
+          requires = [ "gh-runner-secrets.service" ];
         };
       }) config.gh-runner.repos
     );
@@ -101,7 +131,9 @@ in
           enable = true;
           url = "https://github.com/${repo}";
           tokenFile = "/run/gh-runner/gh_pat";
-          user = "gh-runner";
+          user = user;
+          ephemeral = true;
+          replace = true;
           # Matches labels used to target this runner from workflows.
           extraLabels = [
             "arm64"
@@ -121,6 +153,17 @@ in
             openssh
             unzip
             xz
+            determinate-nixd-shim
+          ];
+
+          # Ephemeral runners exit after each job; on the restart, restore the
+          # host's device FlakeHub login, which the job's CI (OIDC) login
+          # replaced for FlakeHub Cache push access.
+          serviceOverrides.ExecStartPost = [
+            "-${pkgs.writeShellScript "restore-flakehub-login" ''
+              exec ${determinate-nixd-shim}/bin/determinate-nixd login token \
+                --token-file /run/gh-runner/fh_token
+            ''}"
           ];
         };
       }) config.gh-runner.repos
