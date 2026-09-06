@@ -1,0 +1,7 @@
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+.terraform.tfvars.lock.info
+*.tfstate
+*.tfstate.*
+.infracost/

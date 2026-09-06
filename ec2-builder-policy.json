@@ -1,0 +1,146 @@
+{
+ "Version": "2012-10-17",
+ "Statement": [
+   {
+     "Sid": "EC2ReadAndDescribe",
+     "Effect": "Allow",
+     "Action": [
+       "ec2:DescribeInstances",
+       "ec2:DescribeImages",
+       "ec2:DescribeInstanceTypes",
+       "ec2:DescribeKeyPairs",
+       "ec2:DescribeSecurityGroups",
+       "ec2:DescribeSubnets",
+       "ec2:DescribeVpcs",
+       "ec2:DescribeVolumes",
+       "ec2:DescribeAvailabilityZones",
+       "ec2:DescribeInstanceStatus",
+       "ec2:DescribeVpcAttribute",
+       "ec2:DescribeSubnetAttribute",
+       "ec2:DescribeInternetGateways",
+       "ec2:DescribeRouteTables",
+       "ec2:DescribeRoute",
+       "ec2:DescribeNetworkInterfaces",
+       "ec2:DescribeNetworkAcls",
+       "ec2:DescribeTags",
+       "ec2:DescribeInstanceCreditSpecifications",
+       "ec2:DescribeInstanceAttribute",
+       "ec2:DescribeVolumesModifications",
+       "ec2:DescribeSnapshots",
+       "ec2:DescribeImages",
+       "ec2:DescribeVpcClassicLink",
+       "ec2:DescribeVpcClassicLinkDnsSupport"
+     ],
+     "Resource": "*"
+   },
+   {
+     "Sid": "EC2LifecycleManagement",
+     "Effect": "Allow",
+     "Action": [
+       "ec2:RunInstances",
+       "ec2:TerminateInstances",
+       "ec2:StopInstances",
+       "ec2:StartInstances"
+     ],
+     "Resource": "*",
+     "Condition": {
+       "StringEqualsIfExists": {
+         "ec2:InstanceType": [
+           "c7g.4xlarge",
+           "t4g.nano",
+           "t4g.small"
+         ]
+       }
+     }
+   },
+   {
+     "Sid": "EC2RunInstanceTypeDeny",
+     "Effect": "Deny",
+     "Action": "ec2:RunInstances",
+     "Resource": "arn:aws:ec2:*:821522070788:instance/*",
+     "Condition": {
+       "StringNotEquals": {
+         "ec2:InstanceType": [
+           "c7g.4xlarge",
+           "t4g.nano",
+           "t4g.small"
+         ]
+       }
+     }
+   },
+   {
+     "Sid": "EC2NetworkingStack",
+     "Effect": "Allow",
+     "Action": [
+       "ec2:CreateVpc",
+       "ec2:DeleteVpc",
+       "ec2:CreateSubnet",
+       "ec2:DeleteSubnet",
+       "ec2:CreateInternetGateway",
+       "ec2:DeleteInternetGateway",
+       "ec2:AttachInternetGateway",
+       "ec2:DetachInternetGateway",
+       "ec2:CreateRouteTable",
+       "ec2:DeleteRouteTable",
+       "ec2:CreateRoute",
+       "ec2:DeleteRoute",
+       "ec2:AssociateRouteTable",
+       "ec2:DisassociateRouteTable",
+       "ec2:CreateSecurityGroup",
+       "ec2:DeleteSecurityGroup",
+       "ec2:AuthorizeSecurityGroupIngress",
+       "ec2:RevokeSecurityGroupIngress",
+       "ec2:AuthorizeSecurityGroupEgress",
+       "ec2:RevokeSecurityGroupEgress",
+       "ec2:DeleteVolume",
+       "ec2:ModifyVpcAttribute",
+       "ec2:ModifySubnetAttribute",
+       "ec2:CreateImage",
+       "ec2:CreateSnapshot",
+       "ec2:DeleteSnapshot",
+       "ec2:DeregisterImage"
+     ],
+     "Resource": "*"
+   },
+   {
+     "Sid": "EC2Tagging",
+     "Effect": "Allow",
+     "Action": "ec2:CreateTags",
+     "Resource": "*",
+     "Condition": {
+       "StringEquals": {
+         "ec2:CreateAction": [
+           "RunInstances",
+           "CreateVpc",
+           "CreateSubnet",
+           "CreateInternetGateway",
+           "CreateRouteTable",
+           "CreateSecurityGroup"
+         ]
+       }
+     }
+   },
+   {
+     "Sid": "IAMSelfSimulation",
+     "Effect": "Allow",
+     "Action": "iam:SimulatePrincipalPolicy",
+     "Resource": "arn:aws:iam::821522070788:user/ec2-ephemeral-builder"
+   },
+   {
+     "Sid": "EC2KeyPairManagement",
+     "Effect": "Allow",
+     "Action": [
+       "ec2:CreateKeyPair",
+       "ec2:DeleteKeyPair",
+       "ec2:ImportKeyPair"
+     ],
+     "Resource": "*"
+   },
+   {
+     "Sid": "STSAuthDiagnostics",
+     "Effect": "Allow",
+     "Action": "sts:DecodeAuthorizationMessage",
+     "Resource": "*"
+   }
+  ]
+}

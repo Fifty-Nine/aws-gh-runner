@@ -1,0 +1,15 @@
+{
+  description = "NixOS configuration for on-demand AWS GitHub Actions runners";
+
+  inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.*.tar.gz";
+
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.gh-runner = nixpkgs.lib.nixosSystem {
+      system = "aarch64-linux";
+      modules = [
+        "${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
+        ./gh-runner.nix
+      ];
+    };
+  };
+}
