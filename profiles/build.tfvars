@@ -3,3 +3,6 @@
 instance_type       = "c7g.4xlarge"
 volume_size         = 80
 volume_throughput   = 200
+
+# Build tier has ample RAM; disable the default 4 GiB swapfile.
+swap_size_gib      = 0

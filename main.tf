@@ -49,7 +49,8 @@ locals {
   flake_reference = "Fifty-Nine/aws-gh-runner/0.1#nixosConfigurations.gh-runner"
 
   runner_flake = templatefile("${path.module}/runner-flake.nix.tftpl", {
-    repos = var.repos
+    repos         = var.repos
+    swap_size_gib = var.swap_size_gib
   })
 }
 
@@ -61,8 +62,14 @@ variable "instance_type" {
 
 variable "volume_size" {
   type        = number
-  default     = 16
+  default     = 20
   description = "Root volume size in GiB"
+}
+
+variable "swap_size_gib" {
+  type        = number
+  default     = 4
+  description = "Swapfile size in GiB provisioned on the root volume (0 disables swap)"
 }
 
 variable "volume_throughput" {

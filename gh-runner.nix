@@ -46,6 +46,16 @@ in
       '';
     };
 
+    swapSizeMiB = lib.mkOption {
+      type = with lib.types; nullOr ints.positive;
+      default = null;
+      description = ''
+        Size in MiB of a swapfile created on the root volume (e.g. `4096`
+        for 4 GiB); null disables swap. Set for memory-constrained
+        instances (e.g. t4g).
+      '';
+    };
+
     patSecretArn = lib.mkOption {
       type = lib.types.str;
       default = "github-runner/pat";
@@ -65,6 +75,10 @@ in
     # The root volume is expanded to the Terraform-managed size; grow the
     # filesystem to match on first boot.
     boot.growPartition = true;
+
+    swapDevices = lib.optionals (config.gh-runner.swapSizeMiB != null) [
+      { device = "/swapfile"; size = config.gh-runner.swapSizeMiB; }
+    ];
 
     time.timeZone = "UTC";
 

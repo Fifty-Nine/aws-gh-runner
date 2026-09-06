@@ -104,13 +104,25 @@ ssh_key_name = "my-personal-ssh-key"
 repos        = ["User/Repo.git", "User/MyOtherRepo.git"]
 ```
 
+Other variables:
+
+- `volume_size` — root volume in GiB (default `20`). The default includes
+  headroom for the swapfile below; increase further if the volume is also
+  holding large store paths.
+- `swap_size_gib` — swapfile provisioned on the root volume, in GiB
+  (default `4`; set `0` to disable). Recommended for memory-constrained
+  t4g instances; the build tier sets `0` since it has ample RAM.
+
 Apply using one of the supplied profiles from [`profiles/`](profiles/):
 
-| Profile             | Tier                                                 | Indicative cost |
-| ------------------- | ---------------------------------------------------- | --------------- |
-| `warm-nano.tfvars`  | Cache-pull only; cannot compile                      | ~$6.77/mo       |
-| `warm-small.tfvars` | Cache pulls and lightweight builds                   | ~$15.90/mo      |
-| `build.tfvars`      | Full-power cold-cache compilation; run transiently   | ~$15/day        |
+| Profile             | Tier                                                 | Root volume | Indicative cost |
+| ------------------- | ---------------------------------------------------- | ----------- | --------------- |
+| `warm-nano.tfvars`  | Cache-pull only; cannot compile                      | 20 GiB      | ~$6.77/mo       |
+| `warm-small.tfvars` | Cache pulls and lightweight builds                   | 20 GiB      | ~$15.90/mo      |
+| `build.tfvars`      | Full-power cold-cache compilation; run transiently   | 80 GiB      | ~$15/day        |
+
+The warm profiles use the default 4 GiB swapfile; the build profile
+disables swap.
 
 You can use infracost to get updated estimates.
 
@@ -124,6 +136,12 @@ and switches to the per-repo overlay. When it converges, `tofu output
 ssh_command` gives SSH access and the runners appear (registered, possibly
 after a brief delay) under each repository's **Settings → Actions →
 Runners**.
+
+The generated overlay flake applies the baseline module published to
+FlakeHub (`Fifty-Nine/aws-gh-runner/0.1`). When updating this repository's
+module (e.g. after a NixOS option change), let the GitHub Actions workflow
+publish the new FlakeHub release before running `tofu apply`; provisioning
+against an unpublished module fails with an unknown-option error.
 
 Tearing down removes the VPC, subnet, and instance; the Secrets Manager
 secrets and IAM role persist for reuse.

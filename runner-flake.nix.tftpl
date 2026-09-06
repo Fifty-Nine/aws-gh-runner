@@ -12,7 +12,10 @@
         "$${nixpkgs}/nixos/modules/virtualisation/amazon-image.nix"
         determinate.nixosModules.default
         runner.nixosModules.gh-runner
-        { gh-runner.repos = [ %{for repo in repos} "${repo}" %{endfor} ]; }
+        {
+          gh-runner.repos = [ %{for repo in repos} "${repo}" %{endfor} ];
+          gh-runner.swapSizeMiB = %{ if swap_size_gib > 0 }${swap_size_gib * 1024}%{ else }null%{ endif };
+        }
       ];
     };
   };
